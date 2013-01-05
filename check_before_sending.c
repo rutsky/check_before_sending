@@ -28,6 +28,8 @@
 #include <libpurple/account.h>
 #include <pidgin/gtkplugin.h>
 
+#define PLUGIN_ID "gtk-rutsky-check_before_sending"
+
 PurplePlugin *plugin_handle = NULL;
 
 static gboolean 
@@ -35,11 +37,17 @@ outgoing_msg_cb(PurpleAccount *account, const char *who, char **message,
                 PurpleConversation *conv, PurpleMessageFlags flags, 
                 gpointer null)
 {
-  printf("Trying to send: '%s'", *message);
+  printf("Trying to send: '%s'\n", *message);
+  fflush(stdout);
   
   // TODO
+  purple_notify_message(plugin_handle, PURPLE_NOTIFY_MSG_WARNING, "Spell Check Failed",
+                        "You have misspelled words", NULL, NULL, NULL);
+
+  g_free(*message);
+  *message = NULL;
   
-  return TRUE; // TODO
+  return TRUE;
 }
 
 static gboolean
@@ -64,12 +72,12 @@ static PurplePluginInfo info =
   0,
   NULL,
   PURPLE_PRIORITY_DEFAULT,
-  "check_before_sending",
-  "Check Before Sending",
+  PLUGIN_ID,
+  _("Check Before Sending"),
   "0.1",
-  "Check Spelling Before Sending Plugin",
-  "Piding plugin forcing user to recheck message containing spell "
-    "check errors before sending it.",
+  _("Check Spelling Before Sending Plugin"),
+  _("Piding plugin forcing user to recheck message containing spell "
+    "check errors before sending it."),
   "Vladimir Rutsky <altsysrq@gmail.com>",
   "http://github.com/rutsky/check_before_sending/",
   plugin_load,
