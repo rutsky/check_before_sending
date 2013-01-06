@@ -35,25 +35,43 @@
 
 #define WATCHER_OBJECT_KEY "check_before_sending"
 
-// Tag that marks misspelled words in GtkSpell
-// HACK: This is from GtkSpell internals, not available in public interface.
+/* Tag that marks misspelled words in GtkSpell */
+/* HACK: This is from GtkSpell internals, not available in public interface. */
 #define GTK_SPELL_MISSPELLED_TAG "gtkspell-misspelled"
 
 PurplePlugin *plugin_handle = NULL;
 
 struct _watcher {
   GtkTextView *view;
+  gint last_misspelled; /* index of first letter of last misspelled word,
+                           -1 if not defined. */
 };
 
 typedef struct _watcher watcher;
+
+/* Returns TRUE if tag found */
+static gboolean
+forward_to_tag_begin(GtkTextIter *iter, GtkTextTag *tag)
+{
+  if (gtk_text_iter_forward_to_tag_toggle(iter, tag))
+  {
+    if (!gtk_text_iter_begins_tag(iter, tag))
+    {
+      /* Moved to tag end. Moving further */
+      return gtk_text_iter_forward_to_tag_toggle(iter, tag);
+    }
+    else
+      return TRUE;
+  }
+  else
+    return FALSE;
+}
 
 static void
 message_send_cb(GtkWidget *widget, watcher *wtchr)
 {
   GtkTextBuffer *buffer;
   GtkTextIter iter;
-  GtkTextMark *mark;
-  gboolean replaced;
   GtkTextTagTable *tagtable;
   GtkTextTag *misspelled_tag;
 
@@ -61,16 +79,54 @@ message_send_cb(GtkWidget *widget, watcher *wtchr)
   tagtable = gtk_text_buffer_get_tag_table(buffer);
   misspelled_tag = gtk_text_tag_table_lookup(tagtable, GTK_SPELL_MISSPELLED_TAG);
 
-  gtk_text_buffer_get_start_iter(buffer, &iter);
-
-  if (gtk_text_iter_begins_tag(&iter, misspelled_tag) ||
-      gtk_text_iter_forward_to_tag_toggle(&iter, misspelled_tag))
+  if (wtchr->last_misspelled >= 0)
   {
-    /* Misspelled words found */
-    purple_debug_info(PLUGIN_ID,
-                "Misspelled!\n");
-    g_signal_stop_emission_by_name(widget, "message_send");
+    /* Move text cursor to next misspelled word, and if this is last
+     * word - send message */
+
+    gtk_text_buffer_get_iter_at_offset(buffer, &iter, wtchr->last_misspelled);
+
+    if (forward_to_tag_begin(&iter, misspelled_tag))
+    {
+      /* Cursor moved to next misspelled word - stop message sending */
+
+      wtchr->last_misspelled = gtk_text_iter_get_offset(&iter);
+      gtk_text_buffer_place_cursor(buffer, &iter);
+
+      g_signal_stop_emission_by_name(widget, "message_send");
+    }
+    else
+    {
+      /* This was last misspelled word and it was ignored by user - send message */
+    }
   }
+  else
+  {
+    gtk_text_buffer_get_start_iter(buffer, &iter);
+
+    if (gtk_text_iter_begins_tag(&iter, misspelled_tag) ||
+        gtk_text_iter_forward_to_tag_toggle(&iter, misspelled_tag))
+    {
+      /* Misspelled words found.
+       * Move cursor to first misspelled word and stop message sending */
+
+      wtchr->last_misspelled = gtk_text_iter_get_offset(&iter);
+      gtk_text_buffer_place_cursor(buffer, &iter);
+
+      g_signal_stop_emission_by_name(widget, "message_send");
+    }
+    else
+    {
+      /* Text is ok, send it */
+    }
+  }
+}
+
+static
+void
+on_buffer_changed(GtkTextBuffer *buffer, watcher *wtchr)
+{
+  wtchr->last_misspelled = -1;
 }
 
 static void
@@ -82,7 +138,6 @@ watcher_free(watcher *wtchr)
 
   buffer = gtk_text_view_get_buffer(wtchr->view);
 
-  // TODO: I believe this is not needed
   g_signal_handlers_disconnect_matched(buffer,
       G_SIGNAL_MATCH_DATA,
       0, 0, NULL, NULL,
@@ -95,10 +150,9 @@ static void
 attach_to_conversation(PurpleConversation *conv)
 {
   watcher *wtchr;
-  GtkTextBuffer *buffer;
-  GtkTextIter start, end;
   PidginConversation *gtkconv;
   GtkTextView *view;
+  GtkTextBuffer *buffer;
 
   gtkconv = PIDGIN_CONVERSATION(conv);
 
@@ -111,9 +165,16 @@ attach_to_conversation(PurpleConversation *conv)
   /* attach to the widget */
   wtchr = g_new0(watcher, 1);
   wtchr->view = view;
+  wtchr->last_misspelled = -1;
 
   g_object_set_data_full(G_OBJECT(view), WATCHER_OBJECT_KEY, wtchr,
       (GDestroyNotify)watcher_free);
+
+  buffer = gtk_text_view_get_buffer(wtchr->view);
+
+  g_signal_connect_after(G_OBJECT(buffer),
+      "changed",
+      G_CALLBACK(on_buffer_changed), wtchr);
 
   g_signal_connect(G_OBJECT(gtkconv->entry), "message_send",
                    G_CALLBACK(message_send_cb), wtchr);
