@@ -71,7 +71,7 @@ static void
 message_send_cb(GtkWidget *widget, watcher *wtchr)
 {
   GtkTextBuffer *buffer;
-  GtkTextIter iter;
+  GtkTextIter iter, start;
   GtkTextTagTable *tagtable;
   GtkTextTag *misspelled_tag;
 
@@ -102,16 +102,21 @@ message_send_cb(GtkWidget *widget, watcher *wtchr)
   }
   else
   {
-    gtk_text_buffer_get_start_iter(buffer, &iter);
+    gtk_text_buffer_get_start_iter(buffer, &start);
 
-    if (gtk_text_iter_begins_tag(&iter, misspelled_tag) ||
-        gtk_text_iter_forward_to_tag_toggle(&iter, misspelled_tag))
+    /* Force spell checking for current word by navigating to begin of line */
+    gtk_text_buffer_get_iter_at_mark(buffer, &iter, gtk_text_buffer_get_insert(buffer));
+    gtk_text_buffer_place_cursor(buffer, &start);
+    gtk_text_buffer_place_cursor(buffer, &iter);
+
+    if (gtk_text_iter_begins_tag(&start, misspelled_tag) ||
+        gtk_text_iter_forward_to_tag_toggle(&start, misspelled_tag))
     {
       /* Misspelled words found.
        * Move cursor to first misspelled word and stop message sending */
 
-      wtchr->last_misspelled = gtk_text_iter_get_offset(&iter);
-      gtk_text_buffer_place_cursor(buffer, &iter);
+      wtchr->last_misspelled = gtk_text_iter_get_offset(&start);
+      gtk_text_buffer_place_cursor(buffer, &start);
 
       g_signal_stop_emission_by_name(widget, "message_send");
     }
