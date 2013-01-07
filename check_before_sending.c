@@ -53,12 +53,12 @@ typedef struct _watcher watcher;
 static gboolean
 forward_to_tag_begin(GtkTextIter *iter, GtkTextTag *tag)
 {
-  if (gtk_text_iter_forward_to_tag_toggle(iter, tag))
+  if (gtk_text_iter_forward_to_tag_toggle(iter, tag) && !gtk_text_iter_is_end(iter))
   {
     if (!gtk_text_iter_begins_tag(iter, tag))
     {
       /* Moved to tag end. Moving further */
-      return gtk_text_iter_forward_to_tag_toggle(iter, tag);
+      return gtk_text_iter_forward_to_tag_toggle(iter, tag)  && !gtk_text_iter_is_end(iter);
     }
     else
       return TRUE;
