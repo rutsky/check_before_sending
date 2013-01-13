@@ -26,5 +26,5 @@ License
 
 Copyright (C) 2012  Vladimir Rutsky <altsysrq@gmail.com>
 
-Distributed under GPLv2 (only option for Pidin plugins) see COPYING.txt for 
+Distributed under GPLv2 (only option for Pidgin plugins) see COPYING.txt for 
 details.
